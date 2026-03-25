@@ -1,33 +1,71 @@
 package com.securecam.utils
-import android.app.*; import android.content.Context; import android.os.Build; import android.os.VibrationEffect; import android.os.Vibrator; import android.os.VibratorManager
-import androidx.core.app.NotificationCompat; import com.securecam.R; import com.securecam.SecureCamApp
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
+import android.os.Build
+import androidx.core.app.NotificationCompat
+import com.securecam.R
+
 object NotificationHelper {
-    private var nid = 1000
-    fun showMotionAlert(ctx: Context, score: Float) {
-        val n = NotificationCompat.Builder(ctx, SecureCamApp.CHANNEL_MOTION)
-            .setSmallIcon(R.drawable.ic_motion).setContentTitle("⚠️ Motion Detected!")
-            .setContentText("Intensity: ${"%.0f".format(score*100)}%")
-            .setPriority(NotificationCompat.PRIORITY_HIGH).setAutoCancel(true)
-            .setVibrate(longArrayOf(0,300,100,300)).build()
-        ctx.getSystemService(NotificationManager::class.java).notify(nid++, n)
+    private const val CH_MOTION   = "motion_alerts"
+    private const val CH_AI       = "ai_alerts"
+    private const val CH_STREAM   = "stream_service"
+    private const val CH_SECURITY = "security_alerts"
+
+    private var notifId = 100
+
+    fun createChannels(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val nm = context.getSystemService(NotificationManager::class.java)
+        nm.createNotificationChannel(NotificationChannel(CH_MOTION,   "Motion Alerts",   NotificationManager.IMPORTANCE_HIGH))
+        nm.createNotificationChannel(NotificationChannel(CH_AI,       "AI Detections",   NotificationManager.IMPORTANCE_DEFAULT))
+        nm.createNotificationChannel(NotificationChannel(CH_STREAM,   "Streaming",       NotificationManager.IMPORTANCE_LOW))
+        nm.createNotificationChannel(NotificationChannel(CH_SECURITY, "Security Alerts", NotificationManager.IMPORTANCE_HIGH))
     }
-    fun showObjectDetectionAlert(ctx: Context, label: String, confidence: Float) {
-        val n = NotificationCompat.Builder(ctx, SecureCamApp.CHANNEL_AI)
-            .setSmallIcon(R.drawable.ic_ai).setContentTitle("🔍 Detected: $label")
-            .setContentText("${"%.0f".format(confidence*100)}% confidence")
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT).setAutoCancel(true).build()
-        ctx.getSystemService(NotificationManager::class.java).notify(nid++, n)
+
+    fun showMotionAlert(context: Context, score: Float) {
+        val pct = "%.0f".format(score * 100)
+        notify(context, CH_MOTION, "⚠️ Motion Detected", "Motion intensity: $pct%")
     }
-    fun showFaceAlert(ctx: Context, count: Int) {
-        val n = NotificationCompat.Builder(ctx, SecureCamApp.CHANNEL_AI)
-            .setSmallIcon(R.drawable.ic_face).setContentTitle("👤 ${if(count==1)"Person" else "$count People"} Detected")
-            .setContentText("Face detected in monitored area")
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT).setAutoCancel(true).build()
-        ctx.getSystemService(NotificationManager::class.java).notify(nid++, n)
+
+    fun showObjectDetectionAlert(context: Context, label: String, confidence: Float) {
+        val pct = "%.0f".format(confidence * 100)
+        notify(context, CH_AI, "🤖 $label detected", "Confidence: $pct%")
     }
-    fun buildStreamingServiceNotification(ctx: Context): Notification =
-        NotificationCompat.Builder(ctx, SecureCamApp.CHANNEL_STREAM)
-            .setSmallIcon(R.drawable.ic_camera_stream).setContentTitle("SecureCam is streaming")
-            .setContentText("Camera stream is live • AI monitoring active")
-            .setPriority(NotificationCompat.PRIORITY_LOW).setOngoing(true).setSilent(true).build()
+
+    fun showFaceAlert(context: Context, count: Int) {
+        notify(context, CH_AI, "👤 Face Detected", "$count face(s) in view")
+    }
+
+    fun showUnknownFaceAlert(context: Context) {
+        notify(context, CH_SECURITY, "❓ Unknown Person!", "Unrecognised face detected by camera")
+    }
+
+    fun showFaceRecognisedAlert(context: Context, name: String) {
+        notify(context, CH_AI, "✅ $name identified", "Known person recognised by camera")
+    }
+
+    fun buildStreamingServiceNotification(context: Context): Notification {
+        createChannels(context)
+        return NotificationCompat.Builder(context, CH_STREAM)
+            .setContentTitle("SecureCam Active")
+            .setContentText("Camera streaming in progress")
+            .setSmallIcon(android.R.drawable.ic_menu_camera)
+            .setOngoing(true)
+            .build()
+    }
+
+    private fun notify(context: Context, channel: String, title: String, text: String) {
+        createChannels(context)
+        val nm = context.getSystemService(NotificationManager::class.java)
+        val n = NotificationCompat.Builder(context, channel)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setAutoCancel(true)
+            .build()
+        nm.notify(notifId++, n)
+    }
 }
